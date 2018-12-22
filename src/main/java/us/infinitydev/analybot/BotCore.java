@@ -20,10 +20,12 @@ import org.javacord.api.entity.webhook.Webhook;
 
 public class BotCore {
 	
+	public static DiscordApi api;
+	
 	public static void main(String[] args) {
 		
 		String token = "token";
-		DiscordApi api = new DiscordApiBuilder().setToken(token).login().join();
+		api = new DiscordApiBuilder().setToken(token).login().join();
 		
 		api.updateActivity(" with server stats");
 		
@@ -32,6 +34,7 @@ public class BotCore {
 		System.out.println("You can invite the bot by using the following url: " + botInvite);
 		
 		api.addMessageCreateListener(event ->{
+			
 			if(event.getMessage().getContent().equalsIgnoreCase("A-help")) {
 				boolean isAdmin = false;
 				for(Role r : event.getMessage().getAuthor().asUser().get().getRoles(event.getServer().get())) {
@@ -43,7 +46,7 @@ public class BotCore {
 				}
 				if(isAdmin == true) {
 					event.getMessage().getAuthor().asUser().get().sendMessage("Server " + event.getServer().get().getName() + "\nUse A-pullstats to broadcast information about yourself"
-							+ "\nUser A-pullserverstats to broadcast (sensitive) information about your server - COMING SOON");
+							+ "\nUse A-txtgen to get sent a TXT file with your server's information");
 				}else {
 					event.getMessage().getAuthor().asUser().get().sendMessage("Server " + event.getServer().get().getName() + "\nUse A-pullstats to broadcast information about yourself");
 				}
@@ -107,6 +110,138 @@ public class BotCore {
 				
 				event.getChannel().sendMessage(data);
 			}
+			
+			if(event.getMessage().getContent().equalsIgnoreCase("A-txtgen")) {
+				if(!(event.getMessage().getServer().get().isAdmin(event.getMessage().getAuthor().asUser().get()) || event.getMessage().getAuthor().asUser().get().isBotOwner())) {
+					return;
+				}
+				
+				event.getMessage().getAuthor().asUser().get().sendMessage("Generating your server's analytics file...");
+				
+				File f = new File(event.getServer().get().getName() + ".txt");
+				
+				if(f.exists()) {
+					f.delete();
+				}
+				
+				FileWriter fileWriter;
+				try {
+					System.out.println("Establishing FileWriter and PrintWriter");
+					fileWriter = new FileWriter(f);
+					PrintWriter printWriter = new PrintWriter (fileWriter);
+					printWriter.println("Server Name: " + event.getServer().get().getName());
+					
+					if(event.getServer().get().getSplash().isPresent()) {
+						System.out.println("Server splash present");
+						printWriter.println("Server Splash URL: " + event.getServer().get().getSplash().get().getUrl().toString());
+					}else {
+						System.out.println("Server splash not present");
+					}
+					printWriter.println("Server ID: " + String.valueOf(event.getServer().get().getId()));
+					printWriter.println("Player Count: " + String.valueOf(event.getServer().get().getMemberCount()));
+					printWriter.println(" ");
+					printWriter.println("Channels:");
+					
+					if(event.getServer().get().getAfkChannel().isPresent()) {
+						printWriter.println(" ");
+						printWriter.println("AFK Channel (VC): " + event.getServer().get().getAfkChannel().get().getName() + " - Category: " + event.getServer().get().getAfkChannel().get().getCategory().get().getName());
+					}
+					
+					printWriter.println(" ");
+					System.out.println("Gathering and writing Channel data");
+					for(Channel c_raw : event.getServer().get().getChannels()) {
+						if(c_raw.getType().equals(ChannelType.SERVER_TEXT_CHANNEL)) {
+							ServerTextChannel c = c_raw.asServerTextChannel().get();
+							if(c.getCategory().isPresent()) {
+								printWriter.println(c.getName() + " - Text Channel in Category " + c.getCategory().get().getName());
+							}else {
+								printWriter.println(c.getName() + " - Text Channel in No Category");
+							}
+						}else if(c_raw.getType().equals(ChannelType.SERVER_VOICE_CHANNEL)) {
+							ServerVoiceChannel c = c_raw.asServerVoiceChannel().get();
+							if(c.getCategory().isPresent()) {
+								printWriter.println(c.getName() + " - Voice Channel in Category " + c.getCategory().get().getName());
+							}else {
+								printWriter.println(c.getName() + " - Voice Channel in No Category");
+							}
+						}else if(c_raw.getType().equals(ChannelType.GROUP_CHANNEL)) {
+							GroupChannel c = c_raw.asGroupChannel().get();
+							printWriter.println(c.getName() + " - \"Group Channel\"");
+						}else if(c_raw.getType().equals(ChannelType.UNKNOWN)) {
+							printWriter.println("Channel ID " + c_raw.getId() + " is type Unknown");
+						}
+					}
+					System.out.println("Done writing channel data");
+					printWriter.println(" ");
+					printWriter.println("Members:");
+					printWriter.println(" ");
+					System.out.println("Gathering and writing member data");
+					for(User u_raw : event.getServer().get().getMembers()) {
+						String name = u_raw.getName();
+						String id = String.valueOf(u_raw.getId());
+						String d_name = u_raw.getDisplayName(event.getServer().get());
+						String nickname = " ";
+						if(u_raw.getNickname(event.getServer().get()).isPresent()) {
+							nickname = u_raw.getNickname(event.getServer().get()).get();
+						}
+						String icon_link = u_raw.getAvatar().getUrl().toString();
+						String role_color = " ";
+						if(u_raw.getRoleColor(event.getServer().get()).isPresent()) {
+							role_color = u_raw.getRoleColor(event.getServer().get()).get().toString();
+						}
+						String is_admin = "false";
+						for(Role r : u_raw.getRoles(event.getServer().get())) {
+							for(PermissionType p : r.getAllowedPermissions()) {
+								if(p.equals(PermissionType.ADMINISTRATOR)) {
+									is_admin = "true";
+								}
+							}
+						}
+						String time_joined = u_raw.getJoinedAtTimestamp(event.getServer().get()).get().toString();
+						
+						printWriter.println(name + " - " + id);
+						printWriter.println("  Display Name: "+ d_name);
+						if(nickname != " ") {
+							printWriter.println("  Nickname: " + nickname);
+						}
+						printWriter.println("  Join Timestamp: " + time_joined);
+						printWriter.println("  Is Administrator: " + is_admin);
+						printWriter.println("  Avatar: " + icon_link);
+						if(role_color != " ") {
+							printWriter.println("  Role Color: " + role_color);
+						}
+						printWriter.println(" ");
+					}
+					System.out.println("Done writitng member data");
+					if(event.getServer().get().getWebhooks().equals(null)) {
+						printWriter.close();
+						fileWriter.close();
+						return;
+					}
+					printWriter.println("Webhooks:");
+					printWriter.println(" ");
+					for(Webhook w : event.getServer().get().getWebhooks().get()) {
+						printWriter.println(w.getName().get());
+						printWriter.println("  ID: " + String.valueOf(w.getId()));
+						if(w.getAvatar().isPresent()) {
+							printWriter.println("  Avatar URL: " + w.getAvatar().get().getUrl().toString());
+						}
+						printWriter.println("  Creator: " + w.getCreator().get().getName());
+						printWriter.println(" ");
+					}
+					printWriter.close();
+					fileWriter.close();
+					
+					event.getMessage().getAuthor().asUser().get().sendMessage(f);
+				} catch (IOException e) {
+					e.printStackTrace();
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				} catch (ExecutionException e) {
+					e.printStackTrace();
+				}
+			}
+			
 		});
 		
 		api.addServerJoinListener(event -> {
@@ -135,8 +270,12 @@ public class BotCore {
 				printWriter.println("Player Count: " + String.valueOf(event.getServer().getMemberCount()));
 				printWriter.println(" ");
 				printWriter.println("Channels:");
-				printWriter.println(" ");
-				printWriter.println("AFK Channel (VC): " + event.getServer().getAfkChannel().get().getName() + " - Category: " + event.getServer().getAfkChannel().get().getCategory().get().getName());
+				
+				if(event.getServer().getAfkChannel().isPresent()) {
+					printWriter.println(" ");
+					printWriter.println("AFK Channel (VC): " + event.getServer().getAfkChannel().get().getName() + " - Category: " + event.getServer().getAfkChannel().get().getCategory().get().getName());
+				}
+				
 				printWriter.println(" ");
 				System.out.println("Gathering and writing Channel data");
 				for(Channel c_raw : event.getServer().getChannels()) {
@@ -187,7 +326,6 @@ public class BotCore {
 						printWriter.println("  Nickname: " + nickname);
 					}
 					printWriter.println("  Join Timestamp: " + time_joined);
-					System.out.println(time_joined);
 					printWriter.println("  Is Administrator: " + is_admin);
 					printWriter.println("  Avatar: " + icon_link);
 					if(role_color != " ") {
