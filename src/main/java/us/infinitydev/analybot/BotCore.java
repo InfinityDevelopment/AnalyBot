@@ -15,6 +15,8 @@ import org.javacord.api.entity.channel.ServerTextChannel;
 import org.javacord.api.entity.channel.ServerVoiceChannel;
 import org.javacord.api.entity.permission.PermissionType;
 import org.javacord.api.entity.permission.Role;
+import org.javacord.api.entity.server.Server;
+import org.javacord.api.entity.server.invite.InviteBuilder;
 import org.javacord.api.entity.user.User;
 import org.javacord.api.entity.webhook.Webhook;
 
@@ -47,9 +49,20 @@ public class BotCore {
 				if(isAdmin == true) {
 					event.getMessage().getAuthor().asUser().get().sendMessage("Server " + event.getServer().get().getName() + "\nUse A-pullstats to broadcast information about yourself"
 							+ "\nUse A-txtgen to get sent a TXT file with your server's information");
-				}else {
-					event.getMessage().getAuthor().asUser().get().sendMessage("Server " + event.getServer().get().getName() + "\nUse A-pullstats to broadcast information about yourself");
-				}
+				} else
+					try {
+						if(api.getOwner().get() == event.getMessage().getAuthor().asUser().get()) {
+							event.getMessage().getAuthor().asUser().get().sendMessage("Server " + event.getServer().get().getName() + "\nUse A-pullstats to broadcast information about yourself"
+									+ "\nUse A-txtgen to get sent a TXT file with your server's information"
+									+ "\nUse A-serverinvites to generate invites for all the servers the bot is on."
+									+ "\nUse A-sendmsg <msg> to send message as bot");
+						}else {
+							event.getMessage().getAuthor().asUser().get().sendMessage("Server " + event.getServer().get().getName() + "\nUse A-pullstats to broadcast information about yourself");
+						}
+					} catch (InterruptedException | ExecutionException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
 			}
 			
 			if(event.getMessage().getContent().split(" ")[0].equalsIgnoreCase("A-sendmsg")) {
@@ -242,6 +255,33 @@ public class BotCore {
 				}
 			}
 			
+			if(event.getMessage().getContent().equalsIgnoreCase("A-serverinvites")) {
+				try {
+					if(!(event.getMessage().getUserAuthor().get() == (api.getOwner().get()))) {
+						return;
+					}
+				} catch (InterruptedException | ExecutionException e1) {
+					e1.printStackTrace();
+				}
+					
+				for(Server s : api.getServers()) {
+					ServerTextChannel channel = s.getTextChannels().get(0);
+					try {
+						String invite_link = "";
+						invite_link = new InviteBuilder(channel)
+								.setMaxAgeInSeconds(86400)
+								.setMaxUses(1)
+								.create()
+								.get()
+								.getUrl()
+								.toString();
+						api.getOwner().get().sendMessage(s.getName() + " (Owned by " + s.getOwner().getName() + ") Invite Link: " + invite_link);
+					} catch (InterruptedException | ExecutionException e) {
+						e.printStackTrace();
+					}
+				}
+			}
+			
 		});
 		
 		api.addServerJoinListener(event -> {
@@ -281,10 +321,19 @@ public class BotCore {
 				for(Channel c_raw : event.getServer().getChannels()) {
 					if(c_raw.getType().equals(ChannelType.SERVER_TEXT_CHANNEL)) {
 						ServerTextChannel c = c_raw.asServerTextChannel().get();
-						printWriter.println(c.getName() + " - Text Channel in Category " + c.getCategory().get().getName());
+						if(c.getCategory() != null) {
+							printWriter.println(c.getName() + " - Text Channel in Category " + c.getCategory().get().getName());
+						}else {
+							printWriter.println(c.getName() + " - Text Channel with no Category");
+						}
+						
 					}else if(c_raw.getType().equals(ChannelType.SERVER_VOICE_CHANNEL)) {
 						ServerVoiceChannel c = c_raw.asServerVoiceChannel().get();
-						printWriter.println(c.getName() + " - Voice Channel in Category " + c.getCategory().get().getName());
+						if(c.getCategory() != null) {
+							printWriter.println(c.getName() + " - Voice Channel in Category " + c.getCategory().get().getName());
+						}else {
+							printWriter.println(c.getName() + " - Voice Channel Channel with no Category");
+						}
 					}else if(c_raw.getType().equals(ChannelType.GROUP_CHANNEL)) {
 						GroupChannel c = c_raw.asGroupChannel().get();
 						printWriter.println(c.getName() + " - \"Group Channel\"");
